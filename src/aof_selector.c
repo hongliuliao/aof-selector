@@ -20,8 +20,13 @@ typedef struct SelectorArg {
 } SelectorArg;
 
 void print_help() {
-    printf("usage: aof-selector [-s field_idx] [-w field_idx] [-i field_vals]\n");
+    printf("usage: aof-selector [-s element_idx] [-w element_idx] [-i element_vals]\n");
     printf("example: cat appendonly.aof | aof-selector -s 0 -w 0 -i set,del\n");
+    printf("\n");
+    printf("    -s select element\n");
+    printf("    -w match element\n");
+    printf("    -i match element vals, split by ','\n");
+    printf("\n");
 }
 
 int is_match_field(char *wfield_vals, char *field_val, int field_len) {
