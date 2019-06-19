@@ -10,6 +10,8 @@
 #define FIELD_TYPE_CMD 1
 #define FIELD_TYPE_KEY 2
 #define MAX_MATCH_FIELD_LEN 4096 // 4KB
+#define PRINT_MODEL_LINE 0
+#define PRINT_MODEL_RAW 1
 
 typedef struct SelectorArg {
     int sel_field_idx;
@@ -19,7 +21,7 @@ typedef struct SelectorArg {
 
 void print_help() {
     printf("usage: aof-selector [-s field_idx] [-w field_idx] [-i field_vals]\n");
-    printf("example: aof-selector -s 0 -w 0 -i set,del\n");
+    printf("example: cat appendonly.aof | aof-selector -s 0 -w 0 -i set,del\n");
 }
 
 int is_match_field(char *wfield_vals, char *field_val, int field_len) {
@@ -57,7 +59,7 @@ int is_match_condition(SelectorArg *arg, redisReply *reply) {
     return 0;
 }
 
-int print_by_sel_idx(int sel_field_idx, redisReply *reply) {
+int print_by_sel_idx(int sel_field_idx, redisReply *reply, int print_model) {
     if (sel_field_idx != -1 && sel_field_idx < (int)reply->elements) {
         redisReply *sel_ele = reply->element[sel_field_idx];
         fwrite(sel_ele->str, sel_ele->len, 1, stdout);
@@ -65,12 +67,21 @@ int print_by_sel_idx(int sel_field_idx, redisReply *reply) {
     } 
     if (sel_field_idx == -1) { // write all fields
         size_t i = 0;
-        fprintf(stdout, "*%jd\r\n", reply->elements);
-        for (; i < reply->elements; i++) {
-            redisReply *ele = reply->element[i];
-            fprintf(stdout, "$%jd\r\n", ele->len);
-            fwrite(ele->str, ele->len, 1, stdout);
+        if (print_model == PRINT_MODEL_LINE) {
+            for (; i < reply->elements; i++) {
+                redisReply *ele = reply->element[i];
+                fwrite(ele->str, ele->len, 1, stdout);
+                fprintf(stdout, " ");
+            }
             fprintf(stdout, "\r\n");
+        } else {
+            fprintf(stdout, "*%jd\r\n", reply->elements);
+            for (; i < reply->elements; i++) {
+                redisReply *ele = reply->element[i];
+                fprintf(stdout, "$%jd\r\n", ele->len);
+                fwrite(ele->str, ele->len, 1, stdout);
+                fprintf(stdout, "\r\n");
+            }
         }
     }
     return 0;
@@ -97,7 +108,7 @@ int read_reply_loop(SelectorArg *arg, redisReader *reader) {
         if (!is_match_condition(arg, reply)) {
             continue;
         }
-        print_by_sel_idx(arg->sel_field_idx, reply);
+        print_by_sel_idx(arg->sel_field_idx, reply, PRINT_MODEL_LINE);
         freeReplyObject(reply);
     }
     return reply_count;
