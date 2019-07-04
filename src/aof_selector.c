@@ -12,11 +12,16 @@
 #define MAX_MATCH_FIELD_LEN 4096 // 4KB
 #define PRINT_MODEL_LINE 0
 #define PRINT_MODEL_RAW 1
+#define MATCH_ELEMENT_SIZE_EQ 0
+#define MATCH_ELEMENT_SIZE_GT 1
+#define MATCH_ELEMENT_SIZE_LT 2
 
 typedef struct SelectorArg {
     int sel_field_idx;
     int where_field_idx;
     char *where_field_vals;
+    int match_element_size_type;
+    int match_element_size;
 } SelectorArg;
 
 void print_help() {
@@ -29,7 +34,7 @@ void print_help() {
     printf("\n");
 }
 
-int is_match_field(char *wfield_vals, char *field_val, int field_len) {
+int is_match_element_val(char *wfield_vals, char *field_val, int field_len) {
     char *buf = (char *)malloc(field_len + 3); // ,,\0
     if (buf == NULL) {
         return 0;
@@ -45,8 +50,25 @@ int is_match_field(char *wfield_vals, char *field_val, int field_len) {
     return ret;
 }
 
+int is_match_element_size(SelectorArg *arg, redisReply *wfield) {
+    if (arg->match_element_size_type == MATCH_ELEMENT_SIZE_GT) {
+        if ((int)wfield->len > arg->match_element_size) {
+            return 1;
+        }
+    } else if (arg->match_element_size_type == MATCH_ELEMENT_SIZE_EQ) {
+        if ((int)wfield->len == arg->match_element_size) {
+            return 1;
+        }
+    } else if (arg->match_element_size_type == MATCH_ELEMENT_SIZE_LT) {
+        if ((int)wfield->len < arg->match_element_size) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int is_match_condition(SelectorArg *arg, redisReply *reply) {
-    if (arg->where_field_idx == -1 || arg->where_field_vals == NULL) {
+    if (arg->where_field_idx == -1) {
         return 1;
     }
     if (reply->type != REDIS_REPLY_ARRAY || 
@@ -54,14 +76,17 @@ int is_match_condition(SelectorArg *arg, redisReply *reply) {
         return 0;
     }
     redisReply *wfield = reply->element[arg->where_field_idx];
+    if (arg->match_element_size_type != -1) {
+        return is_match_element_size(arg, wfield);
+    }
+    if (arg->where_field_vals == NULL) {
+        return 0;
+    }
     if (wfield->len > MAX_MATCH_FIELD_LEN) {
         fprintf(stderr, "Match field reach max size:%jd", wfield->len);
         exit(EXIT_FAILURE);
     }
-    if (is_match_field(arg->where_field_vals, wfield->str, wfield->len)) {
-        return 1;
-    } 
-    return 0;
+    return is_match_element_val(arg->where_field_vals, wfield->str, wfield->len);
 }
 
 int print_by_sel_idx(int sel_field_idx, redisReply *reply, int print_model) {
@@ -149,7 +174,7 @@ int sel_from_stdin(SelectorArg *arg, redisReader *reader) {
 int parse_arg(int argc, char **argv, SelectorArg *sarg) {
     int opt = -1;
     int wfield_vals_len = 0;
-    while ((opt = getopt(argc, argv, "hs:w:i:")) != -1) {
+    while ((opt = getopt(argc, argv, "hs:w:i:g:l:e:")) != -1) {
         switch (opt) {
         case 'h':
             print_help();
@@ -159,6 +184,18 @@ int parse_arg(int argc, char **argv, SelectorArg *sarg) {
             break;
         case 'w':
             sarg->where_field_idx = atoi(optarg);
+            break;
+        case 'g':
+            sarg->match_element_size_type = MATCH_ELEMENT_SIZE_GT;
+            sarg->match_element_size = atoi(optarg);
+            break;
+        case 'l':
+            sarg->match_element_size_type = MATCH_ELEMENT_SIZE_LT;
+            sarg->match_element_size = atoi(optarg);
+            break;
+        case 'e':
+            sarg->match_element_size_type = MATCH_ELEMENT_SIZE_EQ;
+            sarg->match_element_size = atoi(optarg);
             break;
         case 'i':
             /* We get the list of tests to run as a string in the form
@@ -183,6 +220,7 @@ int main(int argc, char **argv) {
     sarg.sel_field_idx = -1;
     sarg.where_field_idx = -1;
     sarg.where_field_vals = NULL;
+    sarg.match_element_size_type = -1;
 
     int ret = parse_arg(argc, argv, &sarg);
     if (ret != 0) {
