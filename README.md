@@ -24,6 +24,17 @@ A aof file selector tool, support filter by aof element
  SET key:000006655125 xxxxxxxxxxxxxxxxxxxx 
 ```
 
+## How to use
+```
+[liao@localhost aof-selector]$ ./output/bin/aof-selector -h
+usage: aof-selector [-s element_idx] [-w element_idx] [-i element_vals]
+example: cat appendonly.aof | aof-selector -s 0 -w 0 -i set,del
+
+    -s select element
+    -w match element
+    -i match element vals, split by ','
+```
+
 ## Aof element idx
 ```
 *3
