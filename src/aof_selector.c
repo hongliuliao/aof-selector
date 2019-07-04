@@ -28,9 +28,12 @@ void print_help() {
     printf("usage: aof-selector [-s element_idx] [-w element_idx] [-i element_vals]\n");
     printf("example: cat appendonly.aof | aof-selector -s 0 -w 0 -i set,del\n");
     printf("\n");
-    printf("    -s select element\n");
-    printf("    -w match element\n");
-    printf("    -i match element vals, split by ','\n");
+    printf("    -s [idx] select element\n");
+    printf("    -w [idx] match element\n");
+    printf("    -i [idx] match element vals, split by ','\n");
+    printf("    -g [ele_size] match element size, greater than compare\n");
+    printf("    -l [ele_size] match element size, low than compare\n");
+    printf("    -e [ele_size] match element size, equal compare\n");
     printf("\n");
 }
 
