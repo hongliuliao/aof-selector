@@ -6,7 +6,7 @@
 
 #include "hiredis.h"
 
-#define AOF_SELECTOR_VERSION "1.0"
+#define AOF_SELECTOR_VERSION "1.1"
 
 #define FIELD_TYPE_ALL 0
 #define FIELD_TYPE_CMD 1
