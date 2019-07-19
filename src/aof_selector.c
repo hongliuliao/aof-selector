@@ -6,6 +6,8 @@
 
 #include "hiredis.h"
 
+#define AOF_SELECTOR_VERSION "1.0"
+
 #define FIELD_TYPE_ALL 0
 #define FIELD_TYPE_CMD 1
 #define FIELD_TYPE_KEY 2
@@ -22,9 +24,11 @@ typedef struct SelectorArg {
     char *where_field_vals;
     int match_element_size_type;
     int match_element_size;
+    int print_model;
 } SelectorArg;
 
 void print_help() {
+    printf("verseion: %s\n", AOF_SELECTOR_VERSION);
     printf("usage: aof-selector [-s element_idx] [-w element_idx] [-i element_vals]\n");
     printf("example: cat appendonly.aof | aof-selector -s 0 -w 0 -i set,del\n");
     printf("\n");
@@ -141,15 +145,25 @@ int read_reply_loop(SelectorArg *arg, redisReader *reader) {
         if (!is_match_condition(arg, reply)) {
             continue;
         }
-        print_by_sel_idx(arg->sel_field_idx, reply, PRINT_MODEL_LINE);
+        print_by_sel_idx(arg->sel_field_idx, reply, arg->print_model);
         freeReplyObject(reply);
     }
     return reply_count;
 }
 
+int skip_to_valid_aof(char *buf, int nread) {
+    for (int i = 0; i < nread; i++) {
+        if (buf[i] == '*') {
+            return i;
+        }
+    }
+    return -1;
+}
+
 int sel_from_stdin(SelectorArg *arg, redisReader *reader) {
     char buf[1024];
 
+    int head_check_valid = 0;
     while(1) {
         int nread = read(fileno(stdin), buf, 1024);
 
@@ -160,7 +174,15 @@ int sel_from_stdin(SelectorArg *arg, redisReader *reader) {
                     strerror(errno));
             return -1;
         }
-        int ret = redisReaderFeed(reader, buf, nread);
+        int skip_size = 0;
+        if (!head_check_valid) {
+            skip_size = skip_to_valid_aof(buf, nread);
+            if (skip_size < 0) {
+                continue;
+            }
+            head_check_valid = 1;
+        }
+        int ret = redisReaderFeed(reader, buf + skip_size, nread - skip_size);
         if (ret != REDIS_OK) {
             fprintf(stderr, "feed buf err:%.100s\n", buf);
             return -1;
@@ -177,7 +199,7 @@ int sel_from_stdin(SelectorArg *arg, redisReader *reader) {
 int parse_arg(int argc, char **argv, SelectorArg *sarg) {
     int opt = -1;
     int wfield_vals_len = 0;
-    while ((opt = getopt(argc, argv, "hs:w:i:g:l:e:")) != -1) {
+    while ((opt = getopt(argc, argv, "hs:w:i:g:l:e:r")) != -1) {
         switch (opt) {
         case 'h':
             print_help();
@@ -210,6 +232,9 @@ int parse_arg(int argc, char **argv, SelectorArg *sarg) {
             sarg->where_field_vals = (char *)malloc(wfield_vals_len);
             snprintf(sarg->where_field_vals, wfield_vals_len, ",%s,", optarg);
             break;
+        case 'r':
+            sarg->print_model = PRINT_MODEL_RAW;
+            break;
         default:
             print_help();
             exit(EXIT_FAILURE);
@@ -224,6 +249,7 @@ int main(int argc, char **argv) {
     sarg.where_field_idx = -1;
     sarg.where_field_vals = NULL;
     sarg.match_element_size_type = -1;
+    sarg.print_model = PRINT_MODEL_LINE;
 
     int ret = parse_arg(argc, argv, &sarg);
     if (ret != 0) {
