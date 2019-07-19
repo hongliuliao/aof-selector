@@ -1,4 +1,5 @@
 # aof-selector
+[![Build Status](https://travis-ci.org/hongliuliao/aof-selector.svg?branch=master)](https://travis-ci.org/hongliuliao/aof-selector)
 A aof file selector tool, support filter by aof element
 
 ## Feature
